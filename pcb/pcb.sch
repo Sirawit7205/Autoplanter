@@ -1,0 +1,225 @@
+EESchema Schematic File Version 2
+LIBS:power
+LIBS:device
+LIBS:switches
+LIBS:relays
+LIBS:motors
+LIBS:transistors
+LIBS:conn
+LIBS:linear
+LIBS:regul
+LIBS:74xx
+LIBS:cmos4000
+LIBS:adc-dac
+LIBS:memory
+LIBS:xilinx
+LIBS:microcontrollers
+LIBS:dsp
+LIBS:microchip
+LIBS:analog_switches
+LIBS:motorola
+LIBS:texas
+LIBS:intel
+LIBS:audio
+LIBS:interface
+LIBS:digital-audio
+LIBS:philips
+LIBS:display
+LIBS:cypress
+LIBS:siliconi
+LIBS:opto
+LIBS:atmel
+LIBS:contrib
+LIBS:valves
+LIBS:ESP8266
+LIBS:max
+LIBS:pcb-cache
+EELAYER 25 0
+EELAYER END
+$Descr A4 11693 8268
+encoding utf-8
+Sheet 1 1
+Title ""
+Date ""
+Rev ""
+Comp ""
+Comment1 ""
+Comment2 ""
+Comment3 ""
+Comment4 ""
+$EndDescr
+$Comp
+L MAX7219 U1
+U 1 1 59F0D05E
+P 3700 2100
+F 0 "U1" H 3700 1400 60  0000 C CNN
+F 1 "MAX7219" H 3700 2800 60  0000 C CNN
+F 2 "" H 4300 2100 60  0000 C CNN
+F 3 "" H 4300 2100 60  0000 C CNN
+	1    3700 2100
+	1    0    0    -1  
+$EndComp
+$Comp
+L LED D1
+U 1 1 59F9A0E2
+P 2250 1750
+F 0 "D1" H 2250 1850 50  0000 C CNN
+F 1 "LED_ON" H 2250 1650 50  0000 C CNN
+F 2 "" H 2250 1750 50  0001 C CNN
+F 3 "" H 2250 1750 50  0001 C CNN
+	1    2250 1750
+	-1   0    0    -1  
+$EndComp
+$Comp
+L LED D2
+U 1 1 59F9A1DD
+P 2250 2050
+F 0 "D2" H 2250 2150 50  0000 C CNN
+F 1 "LED_READY" H 2250 1950 50  0000 C CNN
+F 2 "" H 2250 2050 50  0001 C CNN
+F 3 "" H 2250 2050 50  0001 C CNN
+	1    2250 2050
+	-1   0    0    -1  
+$EndComp
+$Comp
+L LED D3
+U 1 1 59F9A21D
+P 2250 2350
+F 0 "D3" H 2250 2450 50  0000 C CNN
+F 1 "LED_INT" H 2250 2250 50  0000 C CNN
+F 2 "" H 2250 2350 50  0001 C CNN
+F 3 "" H 2250 2350 50  0001 C CNN
+	1    2250 2350
+	-1   0    0    -1  
+$EndComp
+$Comp
+L LED D4
+U 1 1 59F9A245
+P 2250 2650
+F 0 "D4" H 2250 2750 50  0000 C CNN
+F 1 "LED_ERR" H 2250 2550 50  0000 C CNN
+F 2 "" H 2250 2650 50  0001 C CNN
+F 3 "" H 2250 2650 50  0001 C CNN
+	1    2250 2650
+	-1   0    0    -1  
+$EndComp
+$Comp
+L HDSM-441B U2
+U 1 1 59F9A281
+P 5900 1850
+F 0 "U2" H 5450 2300 50  0000 C CNN
+F 1 "HDSM-441B" H 6170 2300 50  0000 C CNN
+F 2 "Displays:HDSM-441B_HDSM-443B" H 5900 1250 50  0001 C CNN
+F 3 "" H 5780 1850 50  0001 C CNN
+	1    5900 1850
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	4300 2350 5300 2350
+Wire Wire Line
+	5300 2350 5300 2250
+Wire Wire Line
+	4300 1950 4400 1950
+Wire Wire Line
+	4400 1950 4400 2150
+Wire Wire Line
+	4400 2150 5300 2150
+Wire Wire Line
+	4300 1850 4500 1850
+Wire Wire Line
+	4500 1850 4500 2050
+Wire Wire Line
+	4500 2050 5300 2050
+Wire Wire Line
+	4300 1650 4600 1650
+Wire Wire Line
+	4600 1650 4600 1950
+Wire Wire Line
+	4600 1950 5300 1950
+Wire Wire Line
+	4300 2450 5000 2450
+Wire Wire Line
+	5000 2450 5000 1850
+Wire Wire Line
+	5000 1850 5300 1850
+Wire Wire Line
+	4300 2550 4950 2550
+Wire Wire Line
+	4950 2550 4950 1750
+Wire Wire Line
+	4950 1750 5300 1750
+Wire Wire Line
+	4800 1750 4300 1750
+Wire Wire Line
+	4800 1200 4800 1750
+Wire Wire Line
+	4800 1650 5300 1650
+Wire Wire Line
+	4300 2250 4900 2250
+Wire Wire Line
+	4900 2250 4900 1550
+Wire Wire Line
+	4900 1550 5300 1550
+Wire Wire Line
+	6600 2150 6600 3000
+Wire Wire Line
+	6600 2150 6500 2150
+Wire Wire Line
+	3100 2550 3000 2550
+Wire Wire Line
+	3000 2550 3000 2900
+Wire Wire Line
+	3000 2900 6500 2900
+Wire Wire Line
+	6500 2900 6500 2250
+Wire Wire Line
+	3100 1650 2900 1650
+Wire Wire Line
+	2900 1650 2900 3000
+Wire Wire Line
+	2900 3000 6600 3000
+Wire Wire Line
+	1900 2650 2100 2650
+Wire Wire Line
+	1900 1200 1900 2650
+Wire Wire Line
+	1900 2350 2100 2350
+Wire Wire Line
+	1900 2050 2100 2050
+Connection ~ 1900 2350
+Wire Wire Line
+	1900 1750 2100 1750
+Connection ~ 1900 2050
+Wire Wire Line
+	1900 1200 4800 1200
+Connection ~ 4800 1650
+Connection ~ 1900 1750
+Wire Wire Line
+	2400 2050 2800 2050
+Wire Wire Line
+	2800 2050 2800 2150
+Wire Wire Line
+	2800 2150 3100 2150
+Wire Wire Line
+	2400 2650 2750 2650
+Wire Wire Line
+	2750 2650 2750 2450
+Wire Wire Line
+	2750 2450 3100 2450
+Wire Wire Line
+	2400 2350 2700 2350
+Wire Wire Line
+	2700 2350 2700 1750
+Wire Wire Line
+	2700 1750 3100 1750
+Wire Wire Line
+	2400 1750 2600 1750
+Wire Wire Line
+	2600 1750 2600 1900
+Wire Wire Line
+	2600 1900 3000 1900
+Wire Wire Line
+	3000 1900 3000 2050
+Wire Wire Line
+	3000 2050 3100 2050
+$EndSCHEMATC

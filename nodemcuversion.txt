@@ -1,0 +1,1 @@
+NodeMCU 0.9.6 build 20150704  powered by Lua 5.1.4

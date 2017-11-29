@@ -1,0 +1,11 @@
+authToken: 6545676d36324653b53c8a6edeee39fb
+
+Pin assignments:
+
+LCD: V0
+SOILMS: V1
+LGTLVL: V2
+AIRTMP: V3
+AIRHUM: V4
+
+Push notification enabled
