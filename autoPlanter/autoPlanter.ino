@@ -72,6 +72,7 @@ WidgetLCD lcd(V0);    //Blynk virtual LCD
 void setup() 
 {
   saveData temp;
+  int failCount=0;
   
   //pins config
   pinMode(CS,OUTPUT);
@@ -84,8 +85,8 @@ void setup()
   led.shutdown(0,false);
   led.setIntensity(0,8);
   led.clearDisplay(0);
-  leftDigit='-';
-  rightDigit='-';
+  leftDigit='1';
+  rightDigit='n';
   uiControl();
 
   //DHT11 init
@@ -116,7 +117,17 @@ void setup()
   //Software Serial + Blynk ESP init
   ESPSerial.begin(9600);
   delay(10);
-  Blynk.begin(authToken, wifi, wifiName, wifiPass);
+  
+  Blynk.config(wifi,authToken);
+  while(Blynk.connectWiFi(wifiName,wifiPass)==0&&failCount<3)
+    failCount++;
+  if(failCount<3)
+    Blynk.connect();
+
+  //change UI to ready
+  leftDigit='-';
+  rightDigit='-';
+  uiControl();
 }
 
 void loop() 
@@ -124,8 +135,6 @@ void loop()
   int lightLVL=0,pumpLVL=0,startHum,dayCount=1;
   bool lightOn=false,pumpOn=false;
   long lightDUR=0,pumpDUR=0;
-
-  Blynk.run();
   
   if(digitalRead(POWER)==LOW&&(unsigned long)(millis()-lastBtnM)>500)
     {
@@ -225,7 +234,8 @@ void loop()
                 rightDigit=(8-dayCount)+'0';
              }
             uiControl();
-            blynkLCD(dayCount,lightOn,pumpOn);
+            if(Blynk.connected())
+              blynkHandling(dayCount,lightOn,pumpOn);
           }
   
           if((unsigned long)(millis()-lightTimeM)>=lightDUR)
@@ -277,7 +287,8 @@ void loop()
         //Serial.println("UIUPDO");
         currentM=millis();
         uiControl();
-        blynkLCD(dayCount,lightOn,pumpOn);
+        if(Blynk.connected())
+          blynkHandling(dayCount,lightOn,pumpOn);
       }
     }
     //turn off all displays
@@ -476,18 +487,29 @@ bool errorChecking(bool lightOn,bool pumpOn,int startHum)
   return isError;
 }
 
-void blynkLCD(int dayCount,bool lightOn,bool pumpOn)   //virtual LCD
+//handles Blynk pushing
+void blynkHandling(int dayCount,bool lightOn,bool pumpOn)
 {
   int i;
-  char msg[20]={};
+  char msg[20]={},buff[5]={};
+  double temp,hum;
   
-  lcd.clear();
+  DHTRead(&temp,&hum);
+
+  Blynk.virtualWrite(V1,analogRead(SOILMS));    //SOILMS
+  Blynk.virtualWrite(V2,analogRead(LGTLVL));    //LGTLVL
+  Blynk.virtualWrite(V3,temp);                  //AIRTMP
+  Blynk.virtualWrite(V4,hum);                   //AIRHUM
+  
+  lcd.clear();                                  //VIRLCD
   if(startState==true)
   {
     lcd.print(0,0,"Run: ");
     lcd.print(5,0,8-dayCount);
-    lcd.print(7,0,"day left");
+    lcd.print(7,0,"days left");
 
+    for(i=0;i<20;i++)
+      msg[i]=0;
     if(lightOn==true)
       strcat(msg,"L ");
     if(pumpOn==true)
@@ -495,9 +517,11 @@ void blynkLCD(int dayCount,bool lightOn,bool pumpOn)   //virtual LCD
     for(i=0;i<5;i++)
     {
       if(err[i]==true)
+      {
         strcat(msg,"E");
-        strcat(msg,i+'0');
+        strcat(msg,itoa(i,buff,10));
         strcat(msg," ");
+      }
     }
     
     lcd.print(0,1,"Stat: ");
@@ -507,29 +531,5 @@ void blynkLCD(int dayCount,bool lightOn,bool pumpOn)   //virtual LCD
   {
     lcd.print(0,0,"Idle");
   }
-}
-
-BLYNK_READ(V1)    //SOILMS
-{
-  Blynk.virtualWrite(V1,analogRead(SOILMS));
-}
-
-BLYNK_READ(V2)    //LGTLVL
-{
-  Blynk.virtualWrite(V2,analogRead(LGTLVL));
-}
-
-BLYNK_READ(V3)    //AIRTMP
-{
-  double temp,hum;
-  DHTRead(&temp,&hum);
-  Blynk.virtualWrite(V3,temp);
-}
-
-BLYNK_READ(V4)    //AIRHUM
-{
-  double temp,hum;
-  DHTRead(&temp,&hum);
-  Blynk.virtualWrite(V4,hum);
 }
 
