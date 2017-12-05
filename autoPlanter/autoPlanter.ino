@@ -5,14 +5,22 @@
  * Copyrighted under CC BY-NC-SA 4.0
  */
  
-#include<SPI.h>
-#include<DHT.h>
-#include<EEPROM.h>
-#include<LedControl.h>
-#include<SoftwareSerial.h>
-#include<ESP8266_Lib.h>
-#include<BlynkSimpleShieldEsp8266.h>
-#include<string.h>
+#include <SPI.h>
+#include <DHT.h>
+#include <EEPROM.h>
+#include <LedControl.h>
+#include <SoftwareSerial.h>
+#include <BlynkSimpleShieldEsp8266.h>
+#include <string.h>
+#include <FuzzyRule.h>
+#include <FuzzyComposition.h>
+#include <Fuzzy.h>
+#include <FuzzyRuleConsequent.h>
+#include <FuzzyOutput.h>
+#include <FuzzyInput.h>
+#include <FuzzyIO.h>
+#include <FuzzySet.h>
+#include <FuzzyRuleAntecedent.h>
 
 //SPI pins
 #define SCK 13
@@ -48,26 +56,42 @@
 //misc global data
 struct saveData{
   const char verify[20]="AutoplanterSave";
-  char wifiname[20];
-  char wifipass[20];
-  char authtoken[50];
+  char wifiname[16];
+  char wifipass[16];
+  char authtoken[35];
   unsigned long elapsed;
 };
 
 volatile bool powerState=false,startState=false,internetState=false;
-bool ledOn[5]={},err[10]={};    //ON/READY/INTERNET/ERROR
+bool ledOn[5]={},err[5]={},lightCheck[10]={};    //ON/READY/INTERNET/ERROR
 char leftDigit='-',rightDigit='-'; //2 digits 7-segment LED
 unsigned long initM,startM,currentM=0,saveM=0,oldM=0;     //millis storing var
 unsigned long lightTimeM=0,pumpTimeM=0,lastBtnM=0;
 
-char wifiName[20]={"2107_2.4G"},wifiPass[20]={"21077777"},authToken[50]={"6545676d36324653b53c8a6edeee39fb"};  //internet config
+char wifiName[16]={"2107_2.4G"},wifiPass[16]={"21077777"},authToken[35]={"6545676d36324653b53c8a6edeee39fb"};  //internet config
 
 //global declarations
 LedControl led=LedControl(MOSI,SCK,CS,1);
 SoftwareSerial ESPSerial(ESPRX,ESPTX);
 DHT dht(DHTPIN,DHT11);
 ESP8266 wifi(&ESPSerial);
-WidgetLCD lcd(V0);    //Blynk virtual LCD
+WidgetLED blynkLED(V5);    //Blynk LED
+Fuzzy* fuzzy = new Fuzzy();
+
+//fuzzy rulesets
+FuzzySet* soilL = new FuzzySet(400,500,1023,1023);
+FuzzySet* soilM = new FuzzySet(300,400,400,500);
+FuzzySet* soilH = new FuzzySet(0,0,300,400);
+
+FuzzySet* airtL = new FuzzySet(0,0,25,40);
+FuzzySet* airtH = new FuzzySet(25,40,50,50);
+
+FuzzySet* airhL = new FuzzySet(20,20,50,70);
+FuzzySet* airhH = new FuzzySet(50,70,90,90);
+
+FuzzySet* pumpO = new FuzzySet(0,0,0,0);
+FuzzySet* pumpL = new FuzzySet(0,30,50,80);
+FuzzySet* pumpH = new FuzzySet(50,80,100,100);
 
 void setup() 
 {
@@ -92,6 +116,9 @@ void setup()
   //DHT11 init
   dht.begin();
 
+  //fuzzy init
+  initFuzzy();
+  
   //hold start button to reset EEPROM
   if(digitalRead(START)==LOW)
     eepromClear();
@@ -133,8 +160,8 @@ void setup()
 void loop() 
 {
   int lightLVL=0,pumpLVL=0,startHum,dayCount=1;
-  bool lightOn=false,pumpOn=false;
-  long lightDUR=0,pumpDUR=0;
+  bool lightOn=false,pumpOn=false,isError=false;
+  unsigned long lightDUR=0,pumpDUR=0;
   
   if(digitalRead(POWER)==LOW&&(unsigned long)(millis()-lastBtnM)>500)
     {
@@ -184,18 +211,19 @@ void loop()
           {
             startM=millis();
             dayCount=1;
+            Blynk.notify("The planting cycle has started!");
           }
         else
           {
             startM=(unsigned long)(millis()-oldM);
             dayCount=oldM/days;
+            Blynk.notify("The planting cycle has resumed after power loss.");
           }
   
         ledOn[1]=true;
         leftDigit='0';
         rightDigit=(8-dayCount)+'0';
-        uiControl();
-        Blynk.notify("The planting cycle has started!");  
+        uiControl();  
         
         while((unsigned long)(millis()-startM)<=7*days)
         {
@@ -227,20 +255,19 @@ void loop()
           {
             //Serial.println("UIUPDI");
             currentM=millis();
-            if(errorChecking(lightOn,pumpOn,startHum)==false)
+            isError=errorChecking(lightOn,pumpOn,startHum);
+            if(isError==false)
              {
                 ledOn[3]=false;
                 leftDigit='0';
                 rightDigit=(8-dayCount)+'0';
              }
             uiControl();
-            if(Blynk.connected())
-              blynkHandling(dayCount,lightOn,pumpOn);
           }
   
           if((unsigned long)(millis()-lightTimeM)>=lightDUR)
           {
-            lightOn=lightLogicControl(&lightLVL,&lightDUR);
+            lightOn=lightLogicControl(dayCount,&lightLVL,&lightDUR);
             if(lightOn==true)
               lightTimeM=millis();
           }
@@ -255,14 +282,17 @@ void loop()
             }
           }
   
-          if((unsigned long)(millis()-saveM)>=5*seconds)
+          if((unsigned long)(millis()-saveM)>=15*minutes)
           {
             eepromBackup();
+            if(Blynk.connected())
+              blynkHandling(dayCount,isError);
             saveM=millis();
           }
         }
   
         startState=false;
+        isError=false;
         analogWrite(LIGHT,0);
         analogWrite(PUMP,0);
         leftDigit='-';
@@ -288,7 +318,7 @@ void loop()
         currentM=millis();
         uiControl();
         if(Blynk.connected())
-          blynkHandling(dayCount,lightOn,pumpOn);
+          blynkHandling(dayCount,isError);
       }
     }
     //turn off all displays
@@ -320,23 +350,19 @@ void DHTRead(double *temp, double *humid)
 }
 
 //on/off condition check for LED
-bool lightLogicControl(int *lvl,long *dur)
+bool lightLogicControl(int dayCount,int *lvl,unsigned long *dur)
 {
-  int light;
-  light=analogRead(LGTLVL);
-  
-  //Serial.print("LIGHT: ");
-  //Serial.println(analogRead(LGTLVL));
-
-  //commented for debugging
-  if((unsigned long)(millis()-startM)<2*days)
+  if(dayCount==7) //full light in the last day
   {
-    return false; //no light in first 2 days
+    (*lvl)=255;
+    (*dur)=24*hours;
+    return true;
   }
-  else if(light<100)
+  else if(dayCount>2&&dayCount<7&&lightCheck[dayCount]==false)
   {
-    (*lvl)=255-(map(light,0,1023,0,255));
-    (*dur)=6*hours;
+    lightCheck[dayCount]=true;
+    (*lvl)=127;
+    (*dur)=12*hours;
     return true;
   }
   else
@@ -344,7 +370,7 @@ bool lightLogicControl(int *lvl,long *dur)
 }
 
 //on/off condition check for pump
-bool pumpLogicControl(int *lvl,long *dur)
+bool pumpLogicControl(int *lvl,unsigned long *dur)
 {
   int soilHum;
   double temp,airHum;
@@ -353,25 +379,17 @@ bool pumpLogicControl(int *lvl,long *dur)
   DHTRead(&temp,&airHum);
   soilHum=analogRead(SOILMS);
 
-  /*Serial.print("TEMP: ");
-  Serial.println(temp);
-  Serial.print("AIRHUM: ");
-  Serial.println(airHum);
-  Serial.print("SOILHUM: ");
-  Serial.println(soilHum);*/
-
-  if(soilHum>500)   //too much humidity
-  {
+  if(temp>35)     //too high temperature
     return false;
-  }
   else
   {
-    if(temp>30)
-      (*lvl)=airHum*2;
-    else
-      (*lvl)=airHum;
-      
-    (*dur)=(soilHum/10)*minutes;
+    fuzzy->setInput(1,soilHum);
+    fuzzy->setInput(2,temp);
+    fuzzy->setInput(3,airHum);
+    
+    fuzzy->fuzzify();
+    (*lvl)=(int)fuzzy->defuzzify(1);
+    (*dur)=30*minutes;
     return true;
   }
 }
@@ -488,7 +506,7 @@ bool errorChecking(bool lightOn,bool pumpOn,int startHum)
 }
 
 //handles Blynk pushing
-void blynkHandling(int dayCount,bool lightOn,bool pumpOn)
+void blynkHandling(int dayCount,bool isError)
 {
   int i;
   char msg[20]={},buff[5]={};
@@ -496,40 +514,87 @@ void blynkHandling(int dayCount,bool lightOn,bool pumpOn)
   
   DHTRead(&temp,&hum);
 
+  Blynk.virtualWrite(V0,8-dayCount);            //day count
   Blynk.virtualWrite(V1,analogRead(SOILMS));    //SOILMS
   Blynk.virtualWrite(V2,analogRead(LGTLVL));    //LGTLVL
-  Blynk.virtualWrite(V3,temp);                  //AIRTMP
-  Blynk.virtualWrite(V4,hum);                   //AIRHUM
+  Blynk.virtualWrite(V3,(int)temp);             //AIRTMP
+  Blynk.virtualWrite(V4,(int)hum);              //AIRHUM
   
-  lcd.clear();                                  //VIRLCD
-  if(startState==true)
-  {
-    lcd.print(0,0,"Run: ");
-    lcd.print(5,0,8-dayCount);
-    lcd.print(7,0,"days left");
-
-    for(i=0;i<20;i++)
-      msg[i]=0;
-    if(lightOn==true)
-      strcat(msg,"L ");
-    if(pumpOn==true)
-      strcat(msg,"P ");
-    for(i=0;i<5;i++)
-    {
-      if(err[i]==true)
-      {
-        strcat(msg,"E");
-        strcat(msg,itoa(i,buff,10));
-        strcat(msg," ");
-      }
-    }
-    
-    lcd.print(0,1,"Stat: ");
-    lcd.print(6,1,msg);
-  }
+  if(isError)                                   //Error LED 
+    blynkLED.on();
   else
-  {
-    lcd.print(0,0,"Idle");
-  }
+    blynkLED.off();
+}
+
+void initFuzzy()
+{
+  //soil moisture input
+  FuzzyInput* soilmoist = new FuzzyInput(1);
+  soilmoist->addFuzzySet(soilL);
+  soilmoist->addFuzzySet(soilM);
+  soilmoist->addFuzzySet(soilH);
+  fuzzy->addFuzzyInput(soilmoist);
+
+  //air temp input
+  FuzzyInput* airtemp = new FuzzyInput(2);
+  airtemp->addFuzzySet(airtL);
+  airtemp->addFuzzySet(airtH);
+  fuzzy->addFuzzyInput(airtemp);
+
+  //air humidity input
+  FuzzyInput* airhum = new FuzzyInput(3);
+  airhum->addFuzzySet(airhL);
+  airhum->addFuzzySet(airhH);
+  fuzzy->addFuzzyInput(airhum);
+
+  //pump output
+  FuzzyOutput* pump = new FuzzyOutput(1);
+  pump->addFuzzySet(pumpO);
+  pump->addFuzzySet(pumpL);
+  pump->addFuzzySet(pumpH);
+  fuzzy->addFuzzyOutput(pump);
+
+  //rule 1: SOILMS[L] AND AIRHUM[L] = PUMP[H]
+  FuzzyRuleAntecedent* rule1 = new FuzzyRuleAntecedent();
+  rule1->joinWithAND(soilL,airhL);
+  //rule 2: SOILMS[H] AND AIRHUM[L] = PUMP[L]
+  FuzzyRuleAntecedent* rule2 = new FuzzyRuleAntecedent();
+  rule1->joinWithAND(soilH,airhL);  
+  //rule 3: SOILMS[M] AND AIRHUM[H] = PUMP[L]
+  FuzzyRuleAntecedent* rule3 = new FuzzyRuleAntecedent();
+  rule1->joinWithAND(soilM,airhH);  
+  //rule 4: SOILMS[H] AND AIRHUM[H] = PUMP[O]
+  FuzzyRuleAntecedent* rule4 = new FuzzyRuleAntecedent();
+  rule1->joinWithAND(soilH,airhH);  
+  //rule 5: AIRTMP[L] AND AIRHUM[H] = PUMP[O]
+  FuzzyRuleAntecedent* rule5 = new FuzzyRuleAntecedent();
+  rule1->joinWithAND(airtL,airhH);  
+
+  //rule PUMP[L]
+  FuzzyRuleAntecedent* rulepumpL = new FuzzyRuleAntecedent();
+  rulepumpL->joinWithOR(rule2,rule3);
+  //rule PUMP[O]
+  FuzzyRuleAntecedent* rulepumpO = new FuzzyRuleAntecedent();
+  rulepumpO->joinWithOR(rule4,rule5);
+  
+  //cons 1: PUMP[H]
+  FuzzyRuleConsequent* conspumpH = new FuzzyRuleConsequent();
+  conspumpH->addOutput(pumpH);
+  //cons 2: PUMP[L]
+  FuzzyRuleConsequent* conspumpL = new FuzzyRuleConsequent();
+  conspumpL->addOutput(pumpH);
+  //cons 3: PUMP[O]
+  FuzzyRuleConsequent* conspumpO = new FuzzyRuleConsequent();
+  conspumpO->addOutput(pumpH);
+
+  //Fuzzyrule 1: PUMP[H]
+  FuzzyRule* fuzzyRule1 = new FuzzyRule(1,rule1,conspumpH);
+  fuzzy->addFuzzyRule(fuzzyRule1);
+  //Fuzzyrule 2: PUMP[L]
+  FuzzyRule* fuzzyRule2 = new FuzzyRule(2,rulepumpL,conspumpL);
+  fuzzy->addFuzzyRule(fuzzyRule2);
+  //Fuzzyrule 3: PUMP[O]
+  FuzzyRule* fuzzyRule3 = new FuzzyRule(3,rulepumpO,conspumpO);
+  fuzzy->addFuzzyRule(fuzzyRule3);
 }
 
