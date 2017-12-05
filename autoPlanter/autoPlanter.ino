@@ -293,6 +293,10 @@ void loop()
   
         startState=false;
         isError=false;
+        for(int i=3;i<=6;i++)
+        {
+          lightCheck[i]=false;
+        }
         analogWrite(LIGHT,0);
         analogWrite(PUMP,0);
         leftDigit='-';
