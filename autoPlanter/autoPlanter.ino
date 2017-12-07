@@ -11,7 +11,6 @@
 #include <LedControl.h>
 #include <SoftwareSerial.h>
 #include <BlynkSimpleShieldEsp8266.h>
-#include <string.h>
 #include <FuzzyRule.h>
 #include <FuzzyComposition.h>
 #include <Fuzzy.h>
@@ -50,25 +49,23 @@
 #define seconds 1000
 #define minutes 60000
 #define hours 3600000
-#define days 60000    //debug
-//#define days 86400000
+#define days 86400000
 
 //misc global data
 struct saveData{
   const char verify[20]="AutoplanterSave";
-  char wifiname[16];
-  char wifipass[16];
-  char authtoken[35];
+  //char wifiname[16];
+  //char wifipass[16];
+  //char authtoken[35];
   unsigned long elapsed;
 };
 
-volatile bool powerState=false,startState=false,internetState=false;
+volatile bool powerState=false,startState=false;
 bool ledOn[5]={},err[5]={},lightCheck[10]={};    //ON/READY/INTERNET/ERROR
 char leftDigit='-',rightDigit='-'; //2 digits 7-segment LED
-unsigned long initM,startM,currentM=0,saveM=0,oldM=0;     //millis storing var
-unsigned long lightTimeM=0,pumpTimeM=0,lastBtnM=0;
+unsigned long startM,oldM=0;     //millis storing var
 
-char wifiName[16]={"2107_2.4G"},wifiPass[16]={"21077777"},authToken[35]={"6545676d36324653b53c8a6edeee39fb"};  //internet config
+char wifiName[]={"2107_2.4G"},wifiPass[]={"21077777"},authToken[]={"6545676d36324653b53c8a6edeee39fb"};  //internet config
 
 //global declarations
 LedControl led=LedControl(MOSI,SCK,CS,1);
@@ -117,7 +114,7 @@ void setup()
   dht.begin();
 
   //fuzzy init
-  initFuzzy();
+  //initFuzzy();
   
   //hold start button to reset EEPROM
   if(digitalRead(START)==LOW)
@@ -127,9 +124,9 @@ void setup()
   EEPROM.get(0,temp);
   if(strcmp(temp.verify,"AutoplanterSave")==0)
   {
-    strcpy(wifiName,temp.wifiname);
-    strcpy(wifiPass,temp.wifipass);
-    strcpy(authToken,temp.authtoken);
+    //strcpy(wifiName,temp.wifiname);
+    //strcpy(wifiPass,temp.wifipass);
+    //strcpy(authToken,temp.authtoken);
     if(temp.elapsed!=0)
     {
       powerState=true;
@@ -139,15 +136,19 @@ void setup()
   }
   
   //debug
-  Serial.begin(115200);
+  //Serial.begin(115200);
   
   //Software Serial + Blynk ESP init
   ESPSerial.begin(9600);
   delay(10);
-  
+
+  //Blynk.begin(authToken,wifi,wifiName,wifiPass);
+
   Blynk.config(wifi,authToken);
   while(Blynk.connectWiFi(wifiName,wifiPass)==0&&failCount<3)
+  {
     failCount++;
+  }
   if(failCount<3)
     Blynk.connect();
 
@@ -159,9 +160,9 @@ void setup()
 
 void loop() 
 {
-  int lightLVL=0,pumpLVL=0,startHum,dayCount=1;
+  int lightLVL=0,pumpLVL=0,dayCount=1;
   bool lightOn=false,pumpOn=false,isError=false;
-  unsigned long lightDUR=0,pumpDUR=0;
+  unsigned long lightDUR=0,pumpDUR=0,lightTimeM=0,pumpTimeM=0,lastBtnM=0,currentM=0,saveM=0;
   
   if(digitalRead(POWER)==LOW&&(unsigned long)(millis()-lastBtnM)>500)
     {
@@ -170,27 +171,16 @@ void loop()
       //Serial.println("PWR");
     }
   
-    initM=millis();    //save start time as ref
     while(powerState==true)
     {
       ledOn[0]=true;      //POWER LED
-  
-      //initial conditions check
-      if(analogRead(DEVCLS)<300)
-      {
-        //Serial.println("E0");
-        ledOn[3]=true;
-        leftDigit='E';
-        rightDigit='0';
-      }
-      else if(analogRead(WATLVL)<400)
-      {
-        //Serial.println("E1");
-        ledOn[3]=true;
-        leftDigit='E';
-        rightDigit='1';      
-      }
+      if(Blynk.connected())
+        ledOn[2]=true;
       else
+        ledOn[2]=false;
+        
+      //initial conditions check
+      if(errorChecking(lightOn,pumpOn)==false)
       {
         //Serial.println("INTCHKP");
         ledOn[3]=false;
@@ -235,7 +225,7 @@ void loop()
             {
               analogWrite(LIGHT,0);
             }
-          if(pumpOn==true)
+          if(pumpOn==true&&err[0]==false&&err[1]==false)
             {
               analogWrite(PUMP,pumpLVL);
             }
@@ -251,11 +241,11 @@ void loop()
             rightDigit=(8-dayCount)+'0';
           }
           
-          if((unsigned long)(millis()-currentM)>=seconds)
+          if((unsigned long)(millis()-currentM)>=5*seconds)
           {
             //Serial.println("UIUPDI");
             currentM=millis();
-            isError=errorChecking(lightOn,pumpOn,startHum);
+            isError=errorChecking(lightOn,pumpOn);
             if(isError==false)
              {
                 ledOn[3]=false;
@@ -276,10 +266,7 @@ void loop()
           {
             pumpOn=pumpLogicControl(&pumpLVL,&pumpDUR);
             if(pumpOn==true)
-            {
-              startHum=analogRead(SOILMS);
               pumpTimeM=millis();
-            }
           }
   
           if((unsigned long)(millis()-saveM)>=15*minutes)
@@ -328,10 +315,8 @@ void loop()
     //turn off all displays
     leftDigit='-';
     rightDigit='-';
-    ledOn[0]=false;
-    ledOn[1]=false;
-    ledOn[2]=false;
-    ledOn[3]=false;
+    for(int i=0;i<4;i++)
+      ledOn[i]=false;
     uiControl();
 }
 
@@ -385,6 +370,12 @@ bool pumpLogicControl(int *lvl,unsigned long *dur)
 
   if(temp>35)     //too high temperature
     return false;
+  else if((unsigned long)(millis()-startM)<=6*hours)
+  {
+    (*lvl)=100;
+    (*dur)=15*minutes;
+    return true;
+  }
   else
   {
     fuzzy->setInput(1,soilHum);
@@ -417,9 +408,9 @@ void eepromBackup()
 {
   saveData current;
   
-  strcpy(current.wifiname,wifiName);
-  strcpy(current.wifipass,wifiPass);
-  strcpy(current.authtoken,authToken);
+  //strcpy(current.wifiname,wifiName);
+  //strcpy(current.wifipass,wifiPass);
+  //strcpy(current.authtoken,authToken);
   
   if(startState==true)
     current.elapsed=(unsigned long)(millis()-startM);
@@ -442,7 +433,7 @@ void eepromClear()
 }
 
 //error checking function
-bool errorChecking(bool lightOn,bool pumpOn,int startHum)
+bool errorChecking(bool lightOn,bool pumpOn)
 {
   bool isError=false;
 
@@ -494,8 +485,8 @@ bool errorChecking(bool lightOn,bool pumpOn,int startHum)
   else
     err[3]=false;
 
-  //Error 4: Pump failure
-  if(pumpOn==true&&((unsigned long)(millis()-pumpTimeM)>10*minutes)&&(analogRead(SOILMS)-startHum<200))
+  //Error 4: Pump failure NOT ACCURATE
+  /*if(pumpOn==true&&((unsigned long)(millis()-pumpTimeM)>15*minutes)&&startHum-(analogRead(SOILMS)<50))
   {
     isError=true;
     err[4]=true;
@@ -504,7 +495,7 @@ bool errorChecking(bool lightOn,bool pumpOn,int startHum)
     rightDigit='4';    
   }
   else
-    err[4]=false;
+    err[4]=false;*/
     
   return isError;
 }
@@ -512,8 +503,6 @@ bool errorChecking(bool lightOn,bool pumpOn,int startHum)
 //handles Blynk pushing
 void blynkHandling(int dayCount,bool isError)
 {
-  int i;
-  char msg[20]={},buff[5]={};
   double temp,hum;
   
   DHTRead(&temp,&hum);
@@ -602,3 +591,9 @@ void initFuzzy()
   fuzzy->addFuzzyRule(fuzzyRule3);
 }
 
+int freeRam () 
+{
+  extern int __heap_start, *__brkval; 
+  int v; 
+  return (int) &v - (__brkval == 0 ? (int) &__heap_start : (int) __brkval); 
+}
