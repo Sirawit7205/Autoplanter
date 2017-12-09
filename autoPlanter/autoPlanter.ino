@@ -136,7 +136,7 @@ void setup()
   }
   
   //debug
-  //Serial.begin(115200);
+  Serial.begin(9600);
   
   //Software Serial + Blynk ESP init
   ESPSerial.begin(9600);
@@ -589,11 +589,4 @@ void initFuzzy()
   //Fuzzyrule 3: PUMP[O]
   FuzzyRule* fuzzyRule3 = new FuzzyRule(3,rulepumpO,conspumpO);
   fuzzy->addFuzzyRule(fuzzyRule3);
-}
-
-int freeRam () 
-{
-  extern int __heap_start, *__brkval; 
-  int v; 
-  return (int) &v - (__brkval == 0 ? (int) &__heap_start : (int) __brkval); 
 }
